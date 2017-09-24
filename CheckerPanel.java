@@ -27,6 +27,7 @@ public class CheckerPanel extends JPanel implements MouseListener{
 	private int sizeY = 600;
 	private int firstX = 100;
 	private int firstY = 100;
+	private Boolean globalJump = false;	// checks the board to see if a jump must be made this turn
 	private int fromX, fromY, toX, toY;	// movement integers
 	private JButton newGameButton;	// button for starting a new game
 	private JButton resignButton;	// button for resigning (dependent on whose turn it is)
@@ -53,8 +54,8 @@ public class CheckerPanel extends JPanel implements MouseListener{
 		resignButton = new JButton("Resign");
 		newGameButton.setSize(new Dimension(120,60));
 		resignButton.setSize(new Dimension(120, 60));
-		newGameButton.setLocation(100, 520);
-		resignButton.setLocation(380, 520);
+		newGameButton.setLocation(100, 510);
+		resignButton.setLocation(380, 510);
 		setUpBoard();
 		
 		// if new game is clicked
@@ -99,8 +100,10 @@ public class CheckerPanel extends JPanel implements MouseListener{
 		this.toY = -100;
 	}
 	
+	
 	// set up the board for new games
 	public void setUpBoard(){
+		turn = RED;
 		board = new int[8][8];
 		for (int i = 0; i < 8; i++){
 			for (int j = 0; j < 8; j++){
@@ -148,41 +151,96 @@ public class CheckerPanel extends JPanel implements MouseListener{
 	}
 	
 	// checks if the piece can jump again - at most a piece can jump 3 times if not king...
-	public void scoutJump(int toX, int toY){
+	public Boolean scoutJump(int toX, int toY){
 		
 		Vector<Moves> moreMoves = game.getLegalMoves(toX, toY, board);
 		for (Moves items: moreMoves){
 			if (items.getJump()){
-				
+				return true;
 			}
 		}
-		
+		return false;
 	}
 	
 	// movement (does not check for legality of move)
 	public void move(int fromX, int fromY, int toX, int toY){
 		// this just changes the int values of the 2d array on square to another square
 		Vector<Moves> moves = game.getLegalMoves(fromX, fromY, board);
+
 		Moves currentMove = new Moves(fromX, fromY, toX, toY);
 		boolean legal = false;
+		boolean moreJumps = false;
+		boolean mustJump = false;
+		boolean isJump = false;
+		
+		globalJump = game.checkGlobalJump(board, turn);
+		
+		
+		// checks if any piece must jump
+		
+		
+		
+		// checks if the certain piece must jump
 		for (Moves items : moves){
+			// if the moveset holds a jump move, the user must jump
+			if (items.getJump() == true){
+				mustJump = true;
+				}
+		}
+
+			
+		
+		for (Moves items: moves){
+			// checking if the user chose a move from the move-set AND if the move was jump if must jump is true
 			if ( currentMove.equals(items)){
-				legal = true;
+				
+				// sets the current move jump status to that of the one it matched with
+				currentMove.setJump(items.getJump());
+				
+				// if the current move does have a jump, erases the jumped piece
+				
+				// if the current move is not a jump but it must be a jump then the move is not legal
+				if (items.getJump() == false && globalJump == true){
+					legal = false;
+				}
+				
+				// if mustjump is false and the move is not a jump it is legal
+				else if (items.getJump() == false && globalJump == false){
+					legal = true;
+				}
+				
 				if (items.getJump()){
 					board[items.getJumpedX()][items.getJumpedY()] = EMPTY;
-					// scountJump();
+					isJump = true;
+					legal = true;
 				}
+				
 			}
 		}
+		
+				
 		
 		int holder = board[fromX][fromY];
 		if (fromX != toX && fromY != toY && legal){
 			if (holder!= EMPTY || holder!= ALWAYS_EMPTY){
 				board[fromX][fromY] = EMPTY;
 				board[toX][toY] = holder;
-				if (turn == 1){
+				
+				if (isJump){
+					if (scoutJump(toX, toY)){
+						moreJumps = true;
+					}
+				}
+				
+				if (turn == 1 && moreJumps == false){
+					if (globalJump == true){
+						globalJump = false;
+					}
 					turn = 2;
-				} else {
+				} else  if (turn == 2 && !moreJumps){
+					if (globalJump == true){
+						globalJump = false;
+					}
 					turn = 1;
 				}
 			}
@@ -267,6 +325,16 @@ public class CheckerPanel extends JPanel implements MouseListener{
 						g.setColor(Color.BLUE);
 						g.drawRect(firstX + (fromY * 50), firstY + (50 * fromX), 50, 50);
 						
+					}
+					
+					if (turn == 1){
+						g.setColor(Color.red);
+						g.fillOval(538, 430, 30, 30);
+						g.drawString("RED TURN", 522, 420);
+					} else {
+						g.setColor(Color.black);
+						g.fillOval(538, 130, 30, 30);
+						g.drawString("BLACK TURN", 519, 120);
 					}
 					
 				}

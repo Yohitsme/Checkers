@@ -23,9 +23,13 @@ public class Moves {
 	}
 	
 	public void setJump(Boolean tof, int jumpedX, int jumpedY){
-		jump = true;
+		jump = tof;
 		this.jumpedX = jumpedX;
 		this.jumpedY = jumpedY;
+	}
+	
+	public void setJump(Boolean tof){
+		jump = tof;
 	}
 	
 	public Boolean getJump(){
@@ -50,7 +54,7 @@ public class Moves {
 
 	public String toString(){
 		String str;
-		str = startX + " , " + startY + " | " + endX + " , " + endY;
+		str = startX + " , " + startY + " | " + endX + " , " + endY + " , jump:" + getJump();
 		return str;
 	}
 	
