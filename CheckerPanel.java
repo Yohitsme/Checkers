@@ -9,10 +9,18 @@ import java.awt.event.ActionEvent;
 import java.awt.event.ActionListener;
 import java.awt.event.MouseEvent;
 import java.awt.event.MouseListener;
+import java.io.File;
+import java.io.IOException;
 import java.util.Vector;
 
+import javax.sound.sampled.AudioInputStream;
+import javax.sound.sampled.AudioSystem;
+import javax.sound.sampled.Clip;
+import javax.sound.sampled.LineUnavailableException;
+import javax.sound.sampled.UnsupportedAudioFileException;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
+import javax.swing.JLabel;
 import javax.swing.JPanel;
 
 public class CheckerPanel extends JPanel implements MouseListener{
@@ -22,7 +30,6 @@ public class CheckerPanel extends JPanel implements MouseListener{
 	 */
 	private static final long serialVersionUID = 1L;
 	private Boolean chose = false; // whether the user has chosen a piece
-	private Boolean selected = false;
 	private int sizeX = 600;
 	private int sizeY = 600;
 	private int firstX = 100;
@@ -31,6 +38,10 @@ public class CheckerPanel extends JPanel implements MouseListener{
 	private int fromX, fromY, toX, toY;	// movement integers
 	private JButton newGameButton;	// button for starting a new game
 	private JButton resignButton;	// button for resigning (dependent on whose turn it is)
+	private JLabel counterLabelR;	// label to display the counter for red checkers
+	private JLabel counterLabelB;	// label to display the counter for black checkers
+	private JLabel winLabelR;	// label to display the wins for Red
+	private JLabel winLabelB;	// label to display the wins for Black
 	private int[][] board;	// the main board using various integers to represent the colours
 	
 	// -1 -> always empty, 0 -> empty tile, 1 -> red piece, 2 -> black piece, 3 -> red king piece, 4 -> black king piece
@@ -44,12 +55,18 @@ public class CheckerPanel extends JPanel implements MouseListener{
 	// turn integer variable will dictate who's turn it is using the same schema as above
 		private int turn = RED;
 		private Game game = new Game();
+		private int counterB; 	private int counterR;	// piece counters
+		private int winB; 	private int winR;	// win counters 	
+		private File soundFile;
+		private AudioInputStream audioIn; 
+		private Clip clip;
 
 	public CheckerPanel(){
 		setSize(sizeX, sizeY);
 		setBackground(Color.cyan);
 		setBorder(BorderFactory.createLineBorder(Color.blue, 5));
 		setLayout(null);
+		winR = 0; winB = 0;
 		newGameButton = new JButton("New Game");
 		resignButton = new JButton("Resign");
 		newGameButton.setSize(new Dimension(120,60));
@@ -57,6 +74,22 @@ public class CheckerPanel extends JPanel implements MouseListener{
 		newGameButton.setLocation(100, 510);
 		resignButton.setLocation(380, 510);
 		setUpBoard();
+		// setting up the piece counters
+		setCounterLabelR(new JLabel("Red Pieces: " + getCounterR()));
+		setCounterLabelB(new JLabel("Black Pieces: " + getCounterB()));
+		getCounterLabelR().setSize(new Dimension(120, 60));
+		getCounterLabelB().setSize(new Dimension(120, 60));
+		getCounterLabelR().setLocation(515, 445);
+		getCounterLabelB().setLocation(508, 147);
+		// setting up the win counters
+		winLabelR = new JLabel("WINS: \n" + winR);
+		winLabelB = new JLabel("WINS: \n" + winB);
+		winLabelR.setSize(new Dimension(60, 60));
+		winLabelB.setSize(new Dimension(60, 60));
+		winLabelR.setLocation(530, 25);
+		winLabelB.setLocation(530, 510);
+
+		
 		
 		// if new game is clicked
 		newGameButton.addActionListener(new ActionListener(){
@@ -64,6 +97,8 @@ public class CheckerPanel extends JPanel implements MouseListener{
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
 				setUpBoard();
+				getCounterLabelR().setText("Red Pieces: " + getCounterR());
+				getCounterLabelB().setText("Black Pieces: " + getCounterB());
 				repaint();
 				
 			}
@@ -74,13 +109,27 @@ public class CheckerPanel extends JPanel implements MouseListener{
 
 			@Override
 			public void actionPerformed(ActionEvent arg0) {
-				// TODO Auto-generated method stub
+				if (MyCheckers.playing){
+					if (turn == 1){
+						winB += 1;
+						winLabelB.setText("WINS: \n" + winB);
+					} else if (turn == 2){
+						winR += 1;
+						winLabelR.setText("WINS: \n" + winR);
+					}
+				}
+				MyCheckers.playing = false;
+
 			}
 		});
 		
 		addMouseListener(this);
 		add(newGameButton);
 		add(resignButton);
+		//add(counterLabelR);
+		//add(counterLabelB);
+		add(winLabelR);
+		add(winLabelB);
 		setVisible(true);
 	}
 	
@@ -100,10 +149,10 @@ public class CheckerPanel extends JPanel implements MouseListener{
 		this.toY = -100;
 	}
 	
-	
 	// set up the board for new games
 	public void setUpBoard(){
 		turn = RED;
+		setCounterB(12); setCounterR(12);
 		board = new int[8][8];
 		for (int i = 0; i < 8; i++){
 			for (int j = 0; j < 8; j++){
@@ -126,6 +175,7 @@ public class CheckerPanel extends JPanel implements MouseListener{
 				}
 			}
 		}	
+		MyCheckers.playing = true;
 	}
 		
 	// returns the checker board 2d int array
@@ -162,8 +212,16 @@ public class CheckerPanel extends JPanel implements MouseListener{
 		return false;
 	}
 	
+	// returns if the player with the active turn has 0 pieces
+	public Boolean checkOver(){
+		if (getCounterR() == 0 || getCounterB() == 0){
+			return true;
+		}
+		return false;
+	}
+	
 	// movement (does not check for legality of move)
-	public void move(int fromX, int fromY, int toX, int toY){
+	public void move(int fromX, int fromY, int toX, int toY) throws LineUnavailableException{
 		// this just changes the int values of the 2d array on square to another square
 		Vector<Moves> moves = game.getLegalMoves(fromX, fromY, board);
 
@@ -172,13 +230,10 @@ public class CheckerPanel extends JPanel implements MouseListener{
 		boolean moreJumps = false;
 		boolean mustJump = false;
 		boolean isJump = false;
-		
-		globalJump = game.checkGlobalJump(board, turn);
-		
+		int col = 0;
 		
 		// checks if any piece must jump
-		
-		
+		globalJump = game.checkGlobalJump(board, turn);
 		
 		// checks if the certain piece must jump
 		for (Moves items : moves){
@@ -188,7 +243,6 @@ public class CheckerPanel extends JPanel implements MouseListener{
 				}
 		}
 
-			
 		
 		for (Moves items: moves){
 			// checking if the user chose a move from the move-set AND if the move was jump if must jump is true
@@ -196,9 +250,7 @@ public class CheckerPanel extends JPanel implements MouseListener{
 				
 				// sets the current move jump status to that of the one it matched with
 				currentMove.setJump(items.getJump());
-				
-				// if the current move does have a jump, erases the jumped piece
-				
+							
 				// if the current move is not a jump but it must be a jump then the move is not legal
 				if (items.getJump() == false && globalJump == true){
 					legal = false;
@@ -210,9 +262,22 @@ public class CheckerPanel extends JPanel implements MouseListener{
 				}
 				
 				if (items.getJump()){
+					
+					col = board[items.getJumpedX()][items.getJumpedY()];
 					board[items.getJumpedX()][items.getJumpedY()] = EMPTY;
 					isJump = true;
 					legal = true;
+					if (col == 1 || col == 3){
+						if (getCounterR() - 1 >= 0){
+							setCounterR(getCounterR() - 1);
+							getCounterLabelR().setText("Red Pieces: " + getCounterR());
+						}
+					} else if (col == 2 || col == 4){
+						if (getCounterB() - 1 >= 0){
+							setCounterB(getCounterB() - 1);
+							getCounterLabelB().setText("Black Pieces: " + getCounterB());
+						}
+					}
 				}
 				
 			}
@@ -225,6 +290,25 @@ public class CheckerPanel extends JPanel implements MouseListener{
 			if (holder!= EMPTY || holder!= ALWAYS_EMPTY){
 				board[fromX][fromY] = EMPTY;
 				board[toX][toY] = holder;
+				
+				soundFile = new File("src/checkers/staple.wav");
+				try {
+					audioIn = AudioSystem.getAudioInputStream(soundFile);
+				} catch (UnsupportedAudioFileException e) {
+					e.printStackTrace();
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				
+				clip = AudioSystem.getClip();
+				
+				try {
+					clip.open(audioIn);
+				} catch (IOException e) {
+					e.printStackTrace();
+				}
+				
+				clip.start();
 				
 				if (isJump){
 					if (scoutJump(toX, toY)){
@@ -246,6 +330,19 @@ public class CheckerPanel extends JPanel implements MouseListener{
 			}
 		}
 		repaint();
+		
+		if (checkOver()){
+			if (turn == 1){
+				winR += 1;
+				winLabelR.setText("WINS: \n" + winR);
+			}
+			if (turn == 2){
+			winB += 1;
+			winLabelB.setText("WINS: \n" + winB);
+		 	}
+			MyCheckers.playing = false;
+		}
+		
 
 	}
 	
@@ -278,7 +375,7 @@ public class CheckerPanel extends JPanel implements MouseListener{
 	public void paintComponent(Graphics g){
 		super.paintComponent(g);
 				
-		if (!MyCheckers.playing){
+		if (MyCheckers.playing){
 			
 			crown();
 			
@@ -355,26 +452,31 @@ public class CheckerPanel extends JPanel implements MouseListener{
 		int yCord = event.getY();
 		int colour;
 		
-		
-			// checks whether the click was within the checker board
-			if ((xCord >= firstX+2) && (yCord >= firstY+2) && (xCord <= firstX+398) && (yCord <= firstY+398) ){
-				// map the board to a 2d grid space where each tile is 50 by 50. checks which tile was clicked
-				for (int i = 0; i < 8; i++ ){
-					for (int j = 0; j < 8; j++){
-						if ( ( xCord >= (firstX + ((j)*50)) )  && (xCord < (firstX + ((j+1)*50))) ){
-							if ( ( yCord >= (firstY + ((i)*50)) )  && (yCord < (firstY + ((i+1)*50))) ){
-								if (!chose){
-									colour = board[i][j];
-									if (colour == EMPTY || colour == ALWAYS_EMPTY || colour != turn){
-										break;
-									}
-									fromX = i; fromY = j;
-									chose = true;
-									repaint();
-								} else {
-									toX = i; toY = j;
-									chose = false;
-									move(fromX, fromY, toX, toY);
+		if (MyCheckers.playing){
+				// checks whether the click was within the checker board
+				if ((xCord >= firstX+2) && (yCord >= firstY+2) && (xCord <= firstX+398) && (yCord <= firstY+398) ){
+					// map the board to a 2d grid space where each tile is 50 by 50. checks which tile was clicked
+					for (int i = 0; i < 8; i++ ){
+						for (int j = 0; j < 8; j++){
+							if ( ( xCord >= (firstX + ((j)*50)) )  && (xCord < (firstX + ((j+1)*50))) ){
+								if ( ( yCord >= (firstY + ((i)*50)) )  && (yCord < (firstY + ((i+1)*50))) ){
+									if (!chose){
+										colour = board[i][j];
+										if (colour == EMPTY || colour == ALWAYS_EMPTY || colour != turn){
+											break;
+										}
+										fromX = i; fromY = j;
+										chose = true;
+										repaint();
+									} else {
+										toX = i; toY = j;
+										chose = false;
+										try {
+											move(fromX, fromY, toX, toY);
+										} catch (LineUnavailableException e) {
+											e.printStackTrace();
+										}
+								}
 							}
 						}
 					}
@@ -396,5 +498,37 @@ public class CheckerPanel extends JPanel implements MouseListener{
 
 	@Override
 	public void mouseReleased(MouseEvent arg0) {}
+
+	public JLabel getCounterLabelR() {
+		return counterLabelR;
+	}
+
+	public void setCounterLabelR(JLabel counterLabelR) {
+		this.counterLabelR = counterLabelR;
+	}
+
+	public JLabel getCounterLabelB() {
+		return counterLabelB;
+	}
+
+	public void setCounterLabelB(JLabel counterLabelB) {
+		this.counterLabelB = counterLabelB;
+	}
+
+	public int getCounterR() {
+		return counterR;
+	}
+
+	public void setCounterR(int counterR) {
+		this.counterR = counterR;
+	}
+
+	public int getCounterB() {
+		return counterB;
+	}
+
+	public void setCounterB(int counterB) {
+		this.counterB = counterB;
+	}
 	
 }

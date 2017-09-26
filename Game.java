@@ -467,7 +467,6 @@ public class Game {
 		for (Moves move: moveSet){
 
 			if (move.getJump()){
-				System.out.println(move);
 				jump = true;
 			}
 		}
